@@ -33,7 +33,6 @@ KVMI_1.0 {
 		kvmi_map_physical_page;
 		kvmi_memory_mapping;
 		kvmi_pause_all_vcpus;
-		kvmi_pause_vcpu;
 		kvmi_pop_event;
 		kvmi_queue_page_access;
 		kvmi_queue_registers;
