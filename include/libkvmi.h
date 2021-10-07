@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Bitdefender S.R.L.
+ * Copyright (C) 2017-2021 Bitdefender S.R.L.
  *
  * The KVMI Library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@
 #include <stddef.h>
 
 #include <linux/kvmi.h>
+
+#include "compat_v7.h"
 
 typedef int kvmi_timeout_t;
 

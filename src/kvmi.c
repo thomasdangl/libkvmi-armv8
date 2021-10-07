@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Bitdefender S.R.L.
+ * Copyright (C) 2017-2021 Bitdefender S.R.L.
  *
  * The KVMI Library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -165,7 +165,6 @@ struct kvmi_set_page_write_bitmap_msg {
 
 struct kvmi_pause_vcpu_msg {
 	struct kvmi_msg_hdr    hdr;
-	struct kvmi_vcpu_hdr   vcpu;
 	struct kvmi_pause_vcpu cmd;
 };
 
@@ -826,7 +825,7 @@ static bool batch_with_event_reply_only( struct iovec *iov )
 	struct kvmi_msg_hdr *hdr              = iov->iov_base;
 	bool                 one_msg_in_iovec = ( iov->iov_len == sizeof( *hdr ) + hdr->size );
 
-	return ( one_msg_in_iovec && hdr->id == KVMI_EVENT_REPLY );
+	return ( one_msg_in_iovec && hdr->id == KVMI_VCPU_EVENT );
 }
 
 static struct iovec *alloc_iovec( struct kvmi_batch *grp, struct iovec *buf, size_t buf_len, size_t *iov_cnt,
@@ -1210,23 +1209,33 @@ static int kvmi_send_msg( struct kvmi_dom *dom, unsigned short msg_id, unsigned 
 
 static bool is_event( unsigned msg_id )
 {
-	return ( msg_id == KVMI_EVENT );
+	return ( msg_id == KVMI_VM_EVENT || msg_id == KVMI_VCPU_EVENT );
 }
 
 static int copy_event_common_data( struct kvmi_dom_event *ev, size_t *incoming )
 {
-	const struct kvmi_event *in_common    = ( const struct kvmi_event * )ev->buf;
-	struct kvmi_event *      out_common   = &ev->event.common;
-	size_t                   min_msg_size = offsetof( struct kvmi_event, arch );
-	size_t                   useful       = MIN( in_common->size, sizeof( *out_common ) );
+	const struct kvmi_event *in_common  = ( const struct kvmi_event * )ev->buf;
+	struct kvmi_event *      out_common = &ev->event.common;
+	size_t hdr_size                     = sizeof( struct kvmi_event_hdr );
+	size_t useful;
 
-	if ( in_common->size > *incoming || in_common->size < min_msg_size )
+	/* check that we've received at least kvmi_event_hdr */
+	if ( *incoming < hdr_size )
 		return -1;
 
-	if ( useful )
-		memcpy( out_common, in_common, useful );
+	/* check that we've received kvmi_vcpu_event according to its member (.size) */
+	/* KVMI_VM_EVENT_UNHOOK has only kvmi_event_hdr */
+	if ( *incoming - hdr_size < in_common->ev.size )
+		return -1;
 
-	*incoming -= in_common->size;
+	/* check that we didn't receive event specific data without kvmi_vcpu_event */
+	if ( in_common->ev.size == 0 && *incoming != hdr_size )
+		return -1;
+
+	useful = hdr_size + MIN( in_common->ev.size, sizeof( out_common->ev ) );
+	memcpy( out_common, in_common, useful );
+
+	*incoming -= hdr_size + in_common->ev.size;
 
 	return 0;
 }
@@ -1260,12 +1269,12 @@ static int expected_event_data_size( size_t event_id, size_t *size )
 static int copy_event_specific_data( struct kvmi_dom_event *ev, size_t incoming )
 {
 	const struct kvmi_event *   in_common = ( const struct kvmi_event * )ev->buf;
-	const struct kvmi_event_cr *in_cr     = ( const struct kvmi_event_cr * )( ev->buf + in_common->size );
+	const struct kvmi_event_cr *in_cr     = ( const struct kvmi_event_cr * )( ev->buf + sizeof( struct kvmi_event_hdr ) + in_common->ev.size );
 	struct kvmi_event_cr *      out_cr    = &ev->event.cr;
 	size_t                      expected;
 	size_t                      useful;
 
-	if ( expected_event_data_size( ev->event.common.event, &expected ) )
+	if ( expected_event_data_size( ev->event.common.hdr.event, &expected ) )
 		return -1;
 
 	useful = MIN( expected, incoming );
@@ -1579,7 +1588,7 @@ static void setup_kvmi_pause_vcpu_msg( struct kvmi_pause_vcpu_msg *msg, unsigned
 	msg->hdr.seq  = new_seq();
 	msg->hdr.size = sizeof( *msg ) - sizeof( msg->hdr );
 
-	msg->vcpu.vcpu = vcpu;
+	msg->cmd.vcpu = vcpu;
 }
 
 int kvmi_queue_pause_vcpu( void *grp, unsigned short vcpu )
@@ -1595,15 +1604,9 @@ int kvmi_pause_all_vcpus( void *dom, unsigned int count )
 {
 	struct kvmi_pause_vcpu_msg msg;
 	unsigned short             vcpu;
-	int                        err = -1;
-	void *                     grp;
 
 	if ( !count )
 		return 0;
-
-	grp = kvmi_batch_alloc( dom );
-	if ( !grp )
-		return -1;
 
 	for ( vcpu = 0; vcpu < count; vcpu++ ) {
 
@@ -1611,18 +1614,11 @@ int kvmi_pause_all_vcpus( void *dom, unsigned int count )
 
 		msg.cmd.wait = 1;
 
-		if ( kvmi_batch_add( grp, &msg, sizeof( msg ) ) )
-			goto out;
+		if ( request_raw( dom, &msg, sizeof( msg ), NULL, NULL ) )
+			return -1;
 	}
 
-	if ( kvmi_batch_commit( grp ) )
-		goto out;
-
-	err = 0;
-out:
-	kvmi_batch_free( grp );
-
-	return err;
+	return 0;
 }
 
 static void *alloc_kvmi_set_page_access_msg( unsigned long long int *gpa, unsigned char *access, unsigned short count,
@@ -1641,7 +1637,7 @@ static void *alloc_kvmi_set_page_access_msg( unsigned long long int *gpa, unsign
 	msg->hdr.size = *msg_size - sizeof( msg->hdr );
 
 	msg->cmd.count = count;
-	msg->cmd.view  = view;
+	/* msg->cmd.view  = view; */ (void)view;
 
 	for ( k = 0; k < count; k++ ) {
 		msg->cmd.entries[k].gpa    = gpa[k];
@@ -1746,11 +1742,11 @@ int kvmi_queue_spp_access( void *grp, __u64 *gpa, __u32 *bitmap, __u16 view, __u
 
 int kvmi_get_vcpu_count( void *dom, unsigned int *count )
 {
-	struct kvmi_get_guest_info_reply rpl;
-	size_t                           received = sizeof( rpl );
-	int                              err;
+	struct kvmi_vm_get_info_reply rpl;
+	size_t                        received = sizeof( rpl );
+	int                           err;
 
-	err = request( dom, KVMI_GET_GUEST_INFO, NULL, 0, &rpl, &received );
+	err = request( dom, KVMI_VM_GET_INFO, NULL, 0, &rpl, &received );
 
 	if ( !err )
 		*count = rpl.vcpu_count;
@@ -1761,11 +1757,11 @@ int kvmi_get_vcpu_count( void *dom, unsigned int *count )
 int kvmi_get_tsc_speed( void *dom, unsigned long long int *speed )
 {
 	struct kvmi_vcpu_hdr            req = { .vcpu = 0 };
-	struct kvmi_get_vcpu_info_reply rpl;
+	struct kvmi_vcpu_get_info_reply rpl;
 	size_t                          received = sizeof( rpl );
 	int                             err;
 
-	err = request( dom, KVMI_GET_VCPU_INFO, &req, sizeof( req ), &rpl, &received );
+	err = request( dom, KVMI_VCPU_GET_INFO, &req, sizeof( req ), &rpl, &received );
 
 	if ( !err )
 		*speed = rpl.tsc_speed;
@@ -2236,7 +2232,7 @@ static void setup_reply_header( struct kvmi_msg_hdr *hdr, unsigned int seq, size
 {
 	memset( hdr, 0, sizeof( *hdr ) );
 
-	hdr->id   = KVMI_EVENT_REPLY;
+	hdr->id   = KVMI_VCPU_EVENT;
 	hdr->seq  = seq;
 	hdr->size = msg_size;
 }
@@ -2315,28 +2311,28 @@ int kvmi_get_version( void *dom, unsigned int *version )
 
 int kvmi_spp_support( void *dom, bool *supported )
 {
-	*supported = ( ( struct kvmi_dom * )dom )->supported.spp;
+	*supported = false; (void)dom; /* ( ( struct kvmi_dom * )dom )->supported.spp; */
 
 	return 0;
 }
 
 int kvmi_ve_support( void *dom, bool *supported )
 {
-	*supported = ( ( struct kvmi_dom * )dom )->supported.ve;
+	*supported = false; (void)dom; /* ( ( struct kvmi_dom * )dom )->supported.ve; */
 
 	return 0;
 }
 
 int kvmi_vmfunc_support( void *dom, bool *supported )
 {
-	*supported = ( ( struct kvmi_dom * )dom )->supported.vmfunc;
+	*supported = false; (void)dom; /* ( ( struct kvmi_dom * )dom )->supported.vmfunc; */
 
 	return 0;
 }
 
 int kvmi_eptp_support( void *dom, bool *supported )
 {
-	*supported = ( ( struct kvmi_dom * )dom )->supported.eptp;
+	*supported = false; (void)dom; /* ( ( struct kvmi_dom * )dom )->supported.eptp; */
 
 	return 0;
 }

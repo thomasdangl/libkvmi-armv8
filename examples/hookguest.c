@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Bitdefender S.R.L.
+ * Copyright (C) 2017-2021 Bitdefender S.R.L.
  *
  * The program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -50,18 +50,18 @@ static void setup_vcpu_reply( struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *r
 	struct kvmi_event_reply *common = ( struct kvmi_event_reply * )( rpl + 1 );
 
 	memset( rpl, 0, sizeof( *rpl ) );
-	rpl->vcpu = ev->event.common.vcpu;
+	rpl->vcpu = ev->event.common.ev.vcpu;
 
 	memset( common, 0, sizeof( *common ) );
 	common->action = action;
-	common->event  = ev->event.common.event;
+	common->event  = ev->event.common.hdr.event;
 }
 
 static void reply_continue( void *dom, struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, size_t rpl_size )
 {
 	setup_vcpu_reply( ev, rpl, KVMI_EVENT_ACTION_CONTINUE );
 
-	printf( "Reply with CONTINUE (vcpu%u)\n", ev->event.common.vcpu );
+	printf( "Reply with CONTINUE (vcpu%u)\n", ev->event.common.ev.vcpu );
 
 	if ( kvmi_reply_event( dom, ev->seq, rpl, rpl_size ) )
 		die( "kvmi_reply_event" );
@@ -71,7 +71,7 @@ static void reply_retry( void *dom, struct kvmi_dom_event *ev, struct kvmi_vcpu_
 {
 	setup_vcpu_reply( ev, rpl, KVMI_EVENT_ACTION_RETRY );
 
-	printf( "Reply with RETRY (vcpu%u)\n", ev->event.common.vcpu );
+	printf( "Reply with RETRY (vcpu%u)\n", ev->event.common.ev.vcpu );
 
 	if ( kvmi_reply_event( dom, ev->seq, rpl, rpl_size ) )
 		die( "kvmi_reply_event" );
@@ -88,7 +88,7 @@ static void handle_cr_event( void *dom, struct kvmi_dom_event *ev )
 
 	memset( &rpl, 0, sizeof( rpl ) );
 
-	printf( "CR%d 0x%llx -> 0x%llx (vcpu%u)\n", cr->cr, cr->old_value, cr->new_value, ev->event.common.vcpu );
+	printf( "CR%d 0x%llx -> 0x%llx (vcpu%u)\n", cr->cr, cr->old_value, cr->new_value, ev->event.common.ev.vcpu );
 
 	rpl.cr.new_val = cr->new_value;
 	reply_continue( dom, ev, &rpl.hdr, sizeof( rpl ) );
@@ -106,7 +106,7 @@ static void handle_msr_event( void *dom, struct kvmi_dom_event *ev )
 	memset( &rpl, 0, sizeof( rpl ) );
 
 	printf( "MSR 0x%x 0x%llx -> 0x%llx (vcpu%u)\n", msr->msr, msr->old_value, msr->new_value,
-	        ev->event.common.vcpu );
+	        ev->event.common.ev.vcpu );
 
 	rpl.msr.new_val = msr->new_value;
 	reply_continue( dom, ev, &rpl.hdr, sizeof( rpl ) );
@@ -147,7 +147,7 @@ static void handle_pause_vcpu_event( void *dom, struct kvmi_dom_event *ev )
 		struct kvmi_vcpu_hdr    hdr;
 		struct kvmi_event_reply common;
 	} rpl;
-	unsigned int vcpu = ev->event.common.vcpu;
+	unsigned int vcpu = ev->event.common.ev.vcpu;
 	static bool  events_enabled[MAX_VCPU];
 
 	printf( "PAUSE (vcpu%u)\n", vcpu );
@@ -178,8 +178,8 @@ static void write_protect_page( void *dom, __u64 gpa )
 static void maybe_start_pf_test( void *dom, struct kvmi_dom_event *ev )
 {
 	static bool started;
-	__u64       cr3  = ev->event.common.arch.sregs.cr3;
-	__u16       vcpu = ev->event.common.vcpu;
+	__u64       cr3  = ev->event.common.ev.arch.sregs.cr3;
+	__u16       vcpu = ev->event.common.ev.vcpu;
 	__u64       pt   = cr3 & ~0xfff;
 	__u64       end;
 
@@ -193,7 +193,7 @@ static void maybe_start_pf_test( void *dom, struct kvmi_dom_event *ev )
 
 	started = true;
 
-	if ( ev->event.common.event == KVMI_EVENT_CR ) {
+	if ( ev->event.common.hdr.event == KVMI_EVENT_CR ) {
 		bool enable = false;
 
 		printf( "Disabling CR3 events (vcpu=%d)...\n", vcpu );
@@ -206,7 +206,7 @@ static void maybe_start_pf_test( void *dom, struct kvmi_dom_event *ev )
 static void handle_pf_event( void *dom, struct kvmi_dom_event *ev )
 {
 	struct kvmi_event_pf *pf   = &ev->event.page_fault;
-	__u16                 vcpu = ev->event.common.vcpu;
+	__u16                 vcpu = ev->event.common.ev.vcpu;
 	struct {
 		struct kvmi_vcpu_hdr       hdr;
 		struct kvmi_event_reply    common;
@@ -226,7 +226,7 @@ static void handle_pf_event( void *dom, struct kvmi_dom_event *ev )
 
 static void handle_event( void *dom, struct kvmi_dom_event *ev )
 {
-	unsigned int id = ev->event.common.event;
+	unsigned int id = ev->event.common.hdr.event;
 
 	switch ( id ) {
 		case KVMI_EVENT_CR:
@@ -278,8 +278,10 @@ static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 
 	pause_vm( dom );
 
-	if ( kvmi_get_maximum_gfn( dom, &max_gfn ) )
-		die( "kvmi_get_maximum_gfn" );
+	if ( kvmi_get_maximum_gfn( dom, &max_gfn ) ) {
+		printf( "WARNING: kvmi_get_maximum_gfn() failed. Hardcoding 2GB...\n" );
+		max_gfn = 0x7fFFF;
+	}
 
 	printf( "Max gfn: 0x%llx\n", max_gfn );
 
