@@ -99,6 +99,7 @@ struct kvmi_dom {
 	int                           fd;
 	unsigned int                  api_version;
 	struct kvmi_features          supported;
+	uint64_t                      max_gpa;
 	bool                          disconnected;
 	int                           mem_fd;
 	list_t                        mem_cache;
@@ -628,6 +629,8 @@ static bool handshake_done( struct kvmi_ctx *ctx, struct kvmi_dom *dom )
 		kvmi_log_error( "Invalid handshake data" );
 		return false;
 	}
+
+	dom->max_gpa = qemu->max_gpa;
 
 	memset( &intro, 0, sizeof( intro ) );
 	intro.struct_size = sizeof( intro );
@@ -2440,11 +2443,17 @@ void kvmi_set_log_cb( kvmi_log_cb cb, void *ctx )
 	log_ctx = ctx;
 }
 
-int kvmi_get_maximum_gfn( void *dom, unsigned long long *gfn )
+int kvmi_get_maximum_gfn( void *d, unsigned long long *gfn )
 {
+	struct kvmi_dom              *dom = d;
 	struct kvmi_get_max_gfn_reply rpl;
 	size_t                        received = sizeof( rpl );
 	int                           err;
+
+	if ( dom->max_gpa ) {
+		*gfn = dom->max_gpa / 4096;
+		return 0;
+	}
 
 	err = request( dom, KVMI_GET_MAX_GFN, NULL, 0, &rpl, &received );
 	if ( !err )

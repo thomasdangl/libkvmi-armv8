@@ -54,6 +54,7 @@ struct kvmi_qemu2introspector {
 	uint32_t      padding;
 	int64_t       start_time;
 	char          name[64];
+	uint64_t      max_gpa;
 	/* ... */
 };
 
