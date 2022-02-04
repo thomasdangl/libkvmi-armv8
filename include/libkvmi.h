@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+typedef uint64_t u64;
 #include <linux/kvmi.h>
 
 #include "compat_v7.h"
@@ -34,6 +35,7 @@ struct kvmi_dom_event {
 	void *next;
 	struct {
 		struct kvmi_event common;
+#if 0
 		union {
 			struct kvmi_event_cr         cr;
 			struct kvmi_event_msr        msr;
@@ -43,6 +45,7 @@ struct kvmi_dom_event {
 			struct kvmi_event_descriptor desc;
 			struct kvmi_event_cpuid      cpuid;
 		};
+#endif
 	} event;
 	unsigned char buf[KVMI_MSG_SIZE];
 	unsigned int  seq;
@@ -63,6 +66,9 @@ struct kvmi_introspector2qemu {
 	uint8_t  cookie_hash[20];
 	/* ... */
 };
+
+// TODO: update the API?
+struct kvm_msrs { };
 
 typedef enum { KVMI_LOG_LEVEL_DEBUG, KVMI_LOG_LEVEL_INFO, KVMI_LOG_LEVEL_WARNING, KVMI_LOG_LEVEL_ERROR } kvmi_log_level;
 

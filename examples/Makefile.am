@@ -1,4 +1,4 @@
-AM_CFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/include/linux/$(ARCH)
+AM_CFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/include/linux/arm64
 
 bin_PROGRAMS = hookguest-libkvmi
 

@@ -168,6 +168,7 @@ struct kvmi_event {
 	struct kvmi_vcpu_event ev;
 };
 
+#if 0
 struct kvmi_event_cpuid {
 	__u32 function;
 	__u32 index;
@@ -175,6 +176,7 @@ struct kvmi_event_cpuid {
 	__u8  padding1[3];
 	__u32 padding2;
 };
+#endif
 
 #define KVM_GUEST_MEM_OPEN	_IOW('i', 0x01, unsigned char *)
 #define KVM_GUEST_MEM_MAP	_IOWR('i', 0x02, struct kvmi_guest_mem_map)
@@ -197,6 +199,7 @@ struct kvmi_control_cmd_response {
 	__u32 padding2;
 };
 
+#if 0
 struct kvmi_page_write_bitmap_entry {
 	__u64 gpa;
 	__u32 bitmap;
@@ -209,6 +212,7 @@ struct kvmi_set_page_write_bitmap {
 	__u32 padding;
 	struct kvmi_page_write_bitmap_entry entries[0];
 };
+#endif
 
 struct kvmi_get_max_gfn_reply {
 	__u64 gfn;
@@ -255,10 +259,12 @@ struct kvmi_control_ept_view_req {
  	__u32 padding2;
 };
 
+#if 0
 struct kvmi_vcpu_change_gfn {
 	__u64 old_gfn;
 	__u64 new_gfn;
 };
+#endif
 
 struct kvmi_event_pf_reply {
 };

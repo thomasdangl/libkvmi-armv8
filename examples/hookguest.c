@@ -35,6 +35,7 @@
 
 static void *Dom;
 
+#if 0
 static const char *access_str[] = {
 	"---", "r--", "-w-", "rw-", "--x", "r-x", "-wx", "rwx",
 };
@@ -263,7 +264,7 @@ static void pause_vm( void *dom )
 
 	printf( "We should receive %u pause events\n", count );
 }
-
+#endif
 static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 {
 	unsigned long long max_gfn;
@@ -276,7 +277,7 @@ static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 
 	printf( "fd %d ctx %p\n", kvmi_connection_fd( dom ), ctx );
 
-	pause_vm( dom );
+	//pause_vm( dom );
 
 	if ( kvmi_get_maximum_gfn( dom, &max_gfn ) ) {
 		printf( "WARNING: kvmi_get_maximum_gfn() failed. Hardcoding 2GB...\n" );
@@ -286,6 +287,13 @@ static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 	printf( "Max gfn: 0x%llx\n", max_gfn );
 
 	Dom = dom;
+
+	struct kvm_regs regs = { 0 };
+	struct kvm_sregs sregs = { 0 };
+	if ( !kvmi_get_registers( dom, 0, &regs, &sregs, NULL, NULL ))
+		printf( "TTBR0: 0x%llx\nTTBR1: 0x%llx\n", sregs.sys_regs[7], sregs.sys_regs[8] );
+	else
+		printf( "WARNING: kvmi_get_registers() failed.\n" );
 
 	return 0;
 }
@@ -303,7 +311,7 @@ static void log_cb( kvmi_log_level level, const char *s, void *ctx )
 	( void )ctx;
 	printf( "[level=%d]: %s\n", level, s );
 }
-
+#if 0
 static int spp_bypass = 0;
 
 static void spp_bitmap_test( void *dom )
@@ -353,7 +361,7 @@ static void spp_bitmap_test( void *dom )
 	else
 		printf( "set spp bit map successfully.\n" );
 }
-
+#endif
 int main( int argc, char **argv )
 {
 	void *ctx;
@@ -384,6 +392,7 @@ int main( int argc, char **argv )
 	while ( !Dom )
 		sleep( 1 );
 
+#if 0
 	while ( 1 ) {
 		struct kvmi_dom_event *ev;
 
@@ -410,6 +419,7 @@ int main( int argc, char **argv )
 
 		free( ev );
 	}
+#endif
 
 	kvmi_uninit( ctx );
 

@@ -23,8 +23,8 @@ AC_PROG_LIBTOOL
 
 AC_CANONICAL_HOST
 AS_CASE([$host_cpu],
-  [x86_64], [ARCH=x86_64],
-  [AC_MSG_ERROR([No support for CPU $host_cpu])]
+#  [x86_64], [ARCH=x86_64],
+#  [AC_MSG_ERROR([No support for CPU $host_cpu])]
 )
 AC_SUBST([ARCH])
 

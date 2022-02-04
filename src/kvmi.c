@@ -160,8 +160,10 @@ struct kvmi_set_page_access_msg {
 };
 
 struct kvmi_set_page_write_bitmap_msg {
+#if 0
 	struct kvmi_msg_hdr               hdr;
 	struct kvmi_set_page_write_bitmap cmd;
+#endif
 };
 
 struct kvmi_pause_vcpu_msg {
@@ -1249,17 +1251,17 @@ static int expected_event_data_size( size_t event_id, size_t *size )
 	static const size_t sz[]    = {
                 [KVMI_EVENT_BREAKPOINT]  = sizeof( struct kvmi_event_breakpoint ),
                 [KVMI_EVENT_CREATE_VCPU] = 1,
-                [KVMI_EVENT_CR]          = sizeof( struct kvmi_event_cr ),
-                [KVMI_EVENT_DESCRIPTOR]  = sizeof( struct kvmi_event_descriptor ),
+                [KVMI_EVENT_CR]          = 0, //sizeof( struct kvmi_event_cr ),
+                [KVMI_EVENT_DESCRIPTOR]  = 0, //sizeof( struct kvmi_event_descriptor ),
                 [KVMI_EVENT_HYPERCALL]   = 1,
-                [KVMI_EVENT_MSR]         = sizeof( struct kvmi_event_msr ),
+                [KVMI_EVENT_MSR]         = 0, //sizeof( struct kvmi_event_msr ),
                 [KVMI_EVENT_PAUSE_VCPU]  = 1,
-                [KVMI_EVENT_PF]          = sizeof( struct kvmi_event_pf ),
-                [KVMI_EVENT_TRAP]        = sizeof( struct kvmi_event_trap ),
+                [KVMI_EVENT_PF]          = 0, // sizeof( struct kvmi_event_pf ),
+                [KVMI_EVENT_TRAP]        = 0, // sizeof( struct kvmi_event_trap ),
                 [KVMI_EVENT_UNHOOK]      = 1,
                 [KVMI_EVENT_XSETBV]      = 1,
                 [KVMI_EVENT_SINGLESTEP]  = 1,
-                [KVMI_EVENT_CPUID]       = sizeof( struct kvmi_event_cpuid ),
+                [KVMI_EVENT_CPUID]       = 0, //sizeof( struct kvmi_event_cpuid ),
 	};
 
 	if ( event_id >= sizeof( sz ) / sizeof( sz[0] ) || sz[event_id] == unknown )
@@ -1271,6 +1273,7 @@ static int expected_event_data_size( size_t event_id, size_t *size )
 
 static int copy_event_specific_data( struct kvmi_dom_event *ev, size_t incoming )
 {
+#if 0
 	const struct kvmi_event *   in_common = ( const struct kvmi_event * )ev->buf;
 	const struct kvmi_event_cr *in_cr     = ( const struct kvmi_event_cr * )( ev->buf + sizeof( struct kvmi_event_hdr ) + in_common->ev.size );
 	struct kvmi_event_cr *      out_cr    = &ev->event.cr;
@@ -1283,7 +1286,7 @@ static int copy_event_specific_data( struct kvmi_dom_event *ev, size_t incoming 
 	useful = MIN( expected, incoming );
 	if ( useful )
 		memcpy( out_cr, in_cr, useful );
-
+#endif
 	return 0;
 }
 
@@ -1684,6 +1687,7 @@ int kvmi_queue_page_access( void *grp, unsigned long long int *gpa, unsigned cha
 	return err;
 }
 
+#if 0
 static void *alloc_kvmi_set_page_write_bitmap_msg( __u64 *gpa, __u32 *bitmap, __u16 view, __u16 count,
                                                    size_t *msg_size )
 {
@@ -1709,9 +1713,11 @@ static void *alloc_kvmi_set_page_write_bitmap_msg( __u64 *gpa, __u32 *bitmap, __
 
 	return msg;
 }
+#endif
 
 int kvmi_set_page_write_bitmap( void *dom, __u64 *gpa, __u32 *bitmap, unsigned short count )
 {
+#if 0
 	void * msg;
 	size_t msg_size;
 	int    err  = -1;
@@ -1724,10 +1730,13 @@ int kvmi_set_page_write_bitmap( void *dom, __u64 *gpa, __u32 *bitmap, unsigned s
 	}
 
 	return err;
+#endif
+	return -1;
 }
 
 int kvmi_queue_spp_access( void *grp, __u64 *gpa, __u32 *bitmap, __u16 view, __u16 count )
 {
+#if 0
 	struct kvmi_set_page_write_bitmap *msg;
 	size_t                             msg_size;
 	int                                err;
@@ -1741,6 +1750,8 @@ int kvmi_queue_spp_access( void *grp, __u64 *gpa, __u32 *bitmap, __u16 view, __u
 	free( msg );
 
 	return err;
+#endif
+	return -1;
 }
 
 int kvmi_get_vcpu_count( void *dom, unsigned int *count )
@@ -2126,76 +2137,21 @@ int kvmi_unmap_physical_page( void *d, void *addr )
 	return mem_v2 ? kvmi_unmap_physical_page_v2( d, addr ) : kvmi_unmap_physical_page_v1( d, addr );
 }
 
-static void *alloc_get_registers_req( unsigned short vcpu, struct kvm_msrs *msrs, size_t *req_size )
-{
-	struct {
-		struct kvmi_vcpu_hdr      vcpu;
-		struct kvmi_get_registers regs;
-	} * req;
-
-	*req_size = sizeof( *req ) + sizeof( __u32 ) * msrs->nmsrs;
-	req       = calloc( 1, *req_size );
-
-	if ( req ) {
-		unsigned int k = 0;
-
-		req->vcpu.vcpu  = vcpu;
-		req->regs.nmsrs = msrs->nmsrs;
-
-		for ( ; k < msrs->nmsrs; k++ )
-			req->regs.msrs_idx[k] = msrs->entries[k].index;
-	}
-
-	return req;
-}
-
-static int process_get_registers_reply( struct kvmi_dom *dom, size_t received, struct kvm_regs *regs,
-                                        struct kvm_sregs *sregs, struct kvm_msrs *msrs, unsigned int *mode )
-{
-	struct kvmi_get_registers_reply rpl;
-
-	if ( received != sizeof( rpl ) + sizeof( struct kvm_msr_entry ) * msrs->nmsrs ) {
-		errno = E2BIG;
-		return -1;
-	}
-
-	if ( do_read( dom, &rpl, sizeof( rpl ) ) )
-		return -1;
-
-	if ( do_read( dom, &msrs->entries, sizeof( struct kvm_msr_entry ) * msrs->nmsrs ) )
-		return -1;
-
-	memcpy( regs, &rpl.regs, sizeof( *regs ) );
-	memcpy( sregs, &rpl.sregs, sizeof( *sregs ) );
-	*mode = rpl.mode;
-
-	return 0;
-}
-
 int kvmi_get_registers( void *d, unsigned short vcpu, struct kvm_regs *regs, struct kvm_sregs *sregs,
                         struct kvm_msrs *msrs, unsigned int *mode )
 {
 	struct kvmi_dom *dom = d;
-	void *           req;
-	size_t           req_size;
-	size_t           received;
-	int              err = -1;
+	struct kvmi_vcpu_hdr req = { .vcpu = vcpu };
+	struct kvmi_get_registers_reply rpl;
+	size_t received = sizeof( rpl );
+	int err;
 
-	req = alloc_get_registers_req( vcpu, msrs, &req_size );
+	err = request( dom, KVMI_VCPU_GET_REGISTERS, &req, sizeof( req ), &rpl, &received );
 
-	if ( !req )
-		return -1;
-
-	pthread_mutex_lock( &dom->lock );
-
-	err = request_varlen_response( dom, KVMI_GET_REGISTERS, req, req_size, &received );
-
-	if ( !err )
-		err = process_get_registers_reply( dom, received, regs, sregs, msrs, mode );
-
-	pthread_mutex_unlock( &dom->lock );
-
-	free( req );
+	if ( !err ) {
+		memcpy( regs, &rpl.regs, sizeof( *regs ) );
+		memcpy( sregs, &rpl.sregs, sizeof( *sregs ) );
+	}
 
 	return err;
 }
@@ -2607,10 +2563,13 @@ int kvmi_translate_gva( void *dom, unsigned short vcpu, __u64 gva, __u64 *gpa )
 
 int kvmi_change_gfn( void *dom, unsigned short vcpu, __u64 old_gfn, __u64 new_gfn )
 {
+#if 0
 	struct {
 		struct kvmi_vcpu_hdr        vcpu;
 		struct kvmi_vcpu_change_gfn cmd;
 	} req = { .vcpu = { .vcpu = vcpu }, .cmd = { .old_gfn = old_gfn, .new_gfn = new_gfn } };
 
 	return request( dom, KVMI_VCPU_CHANGE_GFN, &req, sizeof( req ), NULL, NULL );
+#endif
+	return -1;
 }
