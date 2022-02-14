@@ -163,7 +163,7 @@ struct kvmi_inject_exception {
 #define kvmi_event_reply      kvmi_vcpu_event_reply
 #define kvmi_event_trap       kvmi_vcpu_event_trap
 
-struct kvmi_event {
+struct __attribute__((__packed__)) kvmi_event {
 	struct kvmi_event_hdr  hdr;
 	struct kvmi_vcpu_event ev;
 };

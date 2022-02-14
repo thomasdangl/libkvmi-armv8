@@ -35,38 +35,16 @@
 
 static void *Dom;
 
-#if 0
-static const char *access_str[] = {
-	"---", "r--", "-w-", "rw-", "--x", "r-x", "-wx", "rwx",
-};
-
 static void die( const char *msg )
 {
 	perror( msg );
 	exit( 1 );
 }
 
-static void setup_vcpu_reply( struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, int action )
-{
-	struct kvmi_event_reply *common = ( struct kvmi_event_reply * )( rpl + 1 );
-
-	memset( rpl, 0, sizeof( *rpl ) );
-	rpl->vcpu = ev->event.common.ev.vcpu;
-
-	memset( common, 0, sizeof( *common ) );
-	common->action = action;
-	common->event  = ev->event.common.hdr.event;
-}
-
-static void reply_continue( void *dom, struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, size_t rpl_size )
-{
-	setup_vcpu_reply( ev, rpl, KVMI_EVENT_ACTION_CONTINUE );
-
-	printf( "Reply with CONTINUE (vcpu%u)\n", ev->event.common.ev.vcpu );
-
-	if ( kvmi_reply_event( dom, ev->seq, rpl, rpl_size ) )
-		die( "kvmi_reply_event" );
-}
+#if 0
+static const char *access_str[] = {
+	"---", "r--", "-w-", "rw-", "--x", "r-x", "-wx", "rwx",
+};
 
 static void reply_retry( void *dom, struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, size_t rpl_size )
 {
@@ -113,55 +91,6 @@ static void handle_msr_event( void *dom, struct kvmi_dom_event *ev )
 	reply_continue( dom, ev, &rpl.hdr, sizeof( rpl ) );
 }
 
-static void enable_vcpu_events( void *dom, unsigned int vcpu )
-{
-	bool enable = true;
-
-	printf( "Enabling CR, MSR and PF events (vcpu%u)\n", vcpu );
-
-	if ( kvmi_control_events( dom, vcpu, KVMI_EVENT_CR, enable ) ||
-	     kvmi_control_events( dom, vcpu, KVMI_EVENT_MSR, enable ) ||
-	     kvmi_control_events( dom, vcpu, KVMI_EVENT_PF, enable ) )
-		die( "kvmi_control_events" );
-
-	if ( vcpu == 0 ) {
-		printf( "Enabling CR3 events...\n" );
-
-		if ( kvmi_control_cr( dom, vcpu, CR3, enable ) )
-			die( "kvmi_control_cr(3)" );
-	}
-
-	printf( "Enabling CR4 events...\n" );
-
-	if ( kvmi_control_cr( dom, vcpu, CR4, enable ) )
-		die( "kvmi_control_cr(4)" );
-
-	printf( "Enabling MSR_STAR events...\n" );
-
-	if ( kvmi_control_msr( dom, vcpu, MSR_STAR, enable ) )
-		die( "kvmi_control_msr(STAR)" );
-}
-
-static void handle_pause_vcpu_event( void *dom, struct kvmi_dom_event *ev )
-{
-	struct {
-		struct kvmi_vcpu_hdr    hdr;
-		struct kvmi_event_reply common;
-	} rpl;
-	unsigned int vcpu = ev->event.common.ev.vcpu;
-	static bool  events_enabled[MAX_VCPU];
-
-	printf( "PAUSE (vcpu%u)\n", vcpu );
-
-	if ( vcpu < MAX_VCPU && !events_enabled[vcpu] ) {
-		enable_vcpu_events( dom, vcpu );
-		events_enabled[vcpu] = true;
-	}
-
-	memset( &rpl, 0, sizeof( rpl ) );
-
-	reply_continue( dom, ev, &rpl.hdr, sizeof( rpl ) );
-}
 
 static void set_page_access( void *dom, __u64 gpa, __u8 access )
 {
@@ -224,26 +153,73 @@ static void handle_pf_event( void *dom, struct kvmi_dom_event *ev )
 
 	reply_retry( dom, ev, &rpl.hdr, sizeof( rpl ) );
 }
+#endif
+
+static void setup_vcpu_reply( struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, int action )
+{
+	struct kvmi_event_reply *common = ( struct kvmi_event_reply * )( rpl + 1 );
+
+	memset( rpl, 0, sizeof( *rpl ) );
+	rpl->vcpu = ev->event.common.ev.vcpu;
+
+	memset( common, 0, sizeof( *common ) );
+	common->action = action;
+	common->event  = ev->event.common.hdr.event;
+}
+
+static void reply_continue( void *dom, struct kvmi_dom_event *ev, struct kvmi_vcpu_hdr *rpl, size_t rpl_size )
+{
+	setup_vcpu_reply( ev, rpl, KVMI_EVENT_ACTION_CONTINUE );
+
+	printf( "Reply with CONTINUE (vcpu%u)\n", ev->event.common.ev.vcpu );
+
+	if ( kvmi_reply_event( dom, ev->seq, rpl, rpl_size ) )
+		die( "kvmi_reply_event" );
+}
+
+static void handle_pause_vcpu_event( void *dom, struct kvmi_dom_event *ev )
+{
+	struct {
+		struct kvmi_vcpu_hdr    hdr;
+		struct kvmi_event_reply common;
+	} rpl;
+	unsigned int vcpu = ev->event.common.ev.vcpu;
+	static bool  events_enabled[MAX_VCPU];
+
+	printf( "PAUSE (vcpu%u)\n", vcpu );
+
+	printf( "TTBR0: 0x%llx\nTTBR1: 0x%llx\n", ev->event.common.ev.arch.sregs.sys_regs[7],
+			ev->event.common.ev.arch.sregs.sys_regs[8] );
+
+	if ( vcpu < MAX_VCPU && !events_enabled[vcpu] ) {
+		//enable_vcpu_events( dom, vcpu );
+		events_enabled[vcpu] = true;
+	}
+
+	memset( &rpl, 0, sizeof( rpl ) );
+
+	reply_continue( dom, ev, &rpl.hdr, sizeof( rpl ) );
+}
 
 static void handle_event( void *dom, struct kvmi_dom_event *ev )
 {
 	unsigned int id = ev->event.common.hdr.event;
 
 	switch ( id ) {
-		case KVMI_EVENT_CR:
+		/*case KVMI_EVENT_CR:
 			maybe_start_pf_test( dom, ev );
 			handle_cr_event( dom, ev );
 			break;
 		case KVMI_EVENT_MSR:
 			handle_msr_event( dom, ev );
-			break;
+			break;*/
 		case KVMI_EVENT_PAUSE_VCPU:
-			maybe_start_pf_test( dom, ev );
+			//maybe_start_pf_test( dom, ev );
 			handle_pause_vcpu_event( dom, ev );
 			break;
-		case KVMI_EVENT_PF:
+		/*case KVMI_EVENT_PF:
 			handle_pf_event( dom, ev );
-			break;
+			break;*/
 		default:
 			fprintf( stderr, "Unknown event %d\n", id );
 			exit( 1 );
@@ -264,7 +240,7 @@ static void pause_vm( void *dom )
 
 	printf( "We should receive %u pause events\n", count );
 }
-#endif
+
 static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 {
 	unsigned long long max_gfn;
@@ -277,7 +253,7 @@ static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 
 	printf( "fd %d ctx %p\n", kvmi_connection_fd( dom ), ctx );
 
-	//pause_vm( dom );
+	pause_vm( dom );
 
 	if ( kvmi_get_maximum_gfn( dom, &max_gfn ) ) {
 		printf( "WARNING: kvmi_get_maximum_gfn() failed. Hardcoding 2GB...\n" );
@@ -286,14 +262,14 @@ static int new_guest( void *dom, unsigned char ( *uuid )[16], void *ctx )
 
 	printf( "Max gfn: 0x%llx\n", max_gfn );
 
-	Dom = dom;
-
 	struct kvm_regs regs = { 0 };
 	struct kvm_sregs sregs = { 0 };
-	if ( !kvmi_get_registers( dom, 0, &regs, &sregs, NULL, NULL ))
+	if ( !kvmi_get_registers( dom, 0, &regs, &sregs, NULL, NULL ) )
 		printf( "TTBR0: 0x%llx\nTTBR1: 0x%llx\n", sregs.sys_regs[7], sregs.sys_regs[8] );
 	else
 		printf( "WARNING: kvmi_get_registers() failed.\n" );
+
+	Dom = dom;
 
 	return 0;
 }
@@ -392,7 +368,6 @@ int main( int argc, char **argv )
 	while ( !Dom )
 		sleep( 1 );
 
-#if 0
 	while ( 1 ) {
 		struct kvmi_dom_event *ev;
 
@@ -401,10 +376,6 @@ int main( int argc, char **argv )
 		if ( kvmi_wait_event( Dom, WAIT_30s ) ) {
 			if ( errno == ETIMEDOUT ) {
 				printf( "No event.\n" );
-
-				if ( !spp_bypass )
-					spp_bitmap_test( Dom );
-
 				continue;
 			}
 			die( "kvmi_wait_event" );
@@ -419,7 +390,6 @@ int main( int argc, char **argv )
 
 		free( ev );
 	}
-#endif
 
 	kvmi_uninit( ctx );
 
