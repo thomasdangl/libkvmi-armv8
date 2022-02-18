@@ -1878,6 +1878,8 @@ int kvmi_write_physical( void *dom, unsigned long long int gpa, const void *buff
 
 	req->gpa  = gpa;
 	req->size = size;
+	req->padding1 = 0;
+	req->padding2 = 0;
 	memcpy( req->data, buffer, size );
 
 	err = request( dom, KVMI_WRITE_PHYSICAL, req, req_size, NULL, NULL );

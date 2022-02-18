@@ -35,17 +35,17 @@ struct kvmi_dom_event {
 	void *next;
 	struct {
 		struct kvmi_event common;
-#if 0
 		union {
+			struct kvmi_event_breakpoint breakpoint;
+#if 0
 			struct kvmi_event_cr         cr;
 			struct kvmi_event_msr        msr;
-			struct kvmi_event_breakpoint breakpoint;
 			struct kvmi_event_pf         page_fault;
 			struct kvmi_event_trap       trap;
 			struct kvmi_event_descriptor desc;
 			struct kvmi_event_cpuid      cpuid;
-		};
 #endif
+		};
 	} event;
 	unsigned char buf[KVMI_MSG_SIZE];
 	unsigned int  seq;
