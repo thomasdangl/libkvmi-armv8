@@ -2575,3 +2575,11 @@ int kvmi_change_gfn( void *dom, unsigned short vcpu, __u64 old_gfn, __u64 new_gf
 #endif
 	return -1;
 }
+
+int kvmi_flush_cache( void *dom, __u64 pfn, __u64 cnt )
+{
+	struct kvmi_vm_flush_cache req = { .pfn = pfn, .cnt = cnt };
+
+	return request( dom, KVMI_VM_FLUSH_CACHE, &req, sizeof( req ), NULL, NULL );
+}
+

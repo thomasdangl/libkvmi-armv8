@@ -65,6 +65,7 @@ KVMI_1.0 {
 		kvmi_disable_ve;
 		kvmi_get_ept_view;
 		kvmi_control_ept_view;
+		kvmi_flush_cache;
 	local:
 		*;
 };
