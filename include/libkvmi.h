@@ -37,6 +37,7 @@ struct kvmi_dom_event {
 		struct kvmi_event common;
 		union {
 			struct kvmi_event_breakpoint breakpoint;
+			struct kvmi_vcpu_event_singlestep ss;
 #if 0
 			struct kvmi_event_cr         cr;
 			struct kvmi_event_msr        msr;
