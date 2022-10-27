@@ -1251,7 +1251,7 @@ static int expected_event_data_size( size_t event_id, size_t *size )
 	static const size_t sz[]    = {
                 [KVMI_EVENT_BREAKPOINT]  = sizeof( struct kvmi_event_breakpoint ),
                 [KVMI_EVENT_CREATE_VCPU] = 1,
-                [KVMI_EVENT_CR]          = 0, //sizeof( struct kvmi_event_cr ),
+                [KVMI_EVENT_CR]          = sizeof( struct kvmi_event_cr ),
                 [KVMI_EVENT_DESCRIPTOR]  = 0, //sizeof( struct kvmi_event_descriptor ),
                 [KVMI_EVENT_HYPERCALL]   = 1,
                 [KVMI_EVENT_MSR]         = 0, //sizeof( struct kvmi_event_msr ),
@@ -1260,7 +1260,7 @@ static int expected_event_data_size( size_t event_id, size_t *size )
                 [KVMI_EVENT_TRAP]        = 0, // sizeof( struct kvmi_event_trap ),
                 [KVMI_EVENT_UNHOOK]      = 1,
                 [KVMI_EVENT_XSETBV]      = 1,
-                [KVMI_EVENT_SINGLESTEP]  = 1,
+                [KVMI_EVENT_SINGLESTEP]  = sizeof( struct kvmi_vcpu_event_singlestep ),
                 [KVMI_EVENT_CPUID]       = 0, //sizeof( struct kvmi_event_cpuid ),
 	};
 
@@ -1273,7 +1273,6 @@ static int expected_event_data_size( size_t event_id, size_t *size )
 
 static int copy_event_specific_data( struct kvmi_dom_event *ev, size_t incoming )
 {
-#if 0
 	const struct kvmi_event *   in_common = ( const struct kvmi_event * )ev->buf;
 	const struct kvmi_event_cr *in_cr     = ( const struct kvmi_event_cr * )( ev->buf + sizeof( struct kvmi_event_hdr ) + in_common->ev.size );
 	struct kvmi_event_cr *      out_cr    = &ev->event.cr;
@@ -1286,7 +1285,7 @@ static int copy_event_specific_data( struct kvmi_dom_event *ev, size_t incoming 
 	useful = MIN( expected, incoming );
 	if ( useful )
 		memcpy( out_cr, in_cr, useful );
-#endif
+
 	return 0;
 }
 

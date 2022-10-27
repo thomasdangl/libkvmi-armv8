@@ -38,8 +38,8 @@ struct kvmi_dom_event {
 		union {
 			struct kvmi_event_breakpoint breakpoint;
 			struct kvmi_vcpu_event_singlestep ss;
-#if 0
 			struct kvmi_event_cr         cr;
+#if 0
 			struct kvmi_event_msr        msr;
 			struct kvmi_event_pf         page_fault;
 			struct kvmi_event_trap       trap;
