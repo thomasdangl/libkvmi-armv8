@@ -1256,7 +1256,7 @@ static int expected_event_data_size( size_t event_id, size_t *size )
                 [KVMI_EVENT_HYPERCALL]   = 1,
                 [KVMI_EVENT_MSR]         = 0, //sizeof( struct kvmi_event_msr ),
                 [KVMI_EVENT_PAUSE_VCPU]  = 1,
-                [KVMI_EVENT_PF]          = 0, // sizeof( struct kvmi_event_pf ),
+                [KVMI_EVENT_PF]          = sizeof( struct kvmi_event_pf ),
                 [KVMI_EVENT_TRAP]        = 0, // sizeof( struct kvmi_event_trap ),
                 [KVMI_EVENT_UNHOOK]      = 1,
                 [KVMI_EVENT_XSETBV]      = 1,
