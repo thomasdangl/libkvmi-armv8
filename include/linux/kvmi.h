@@ -31,6 +31,7 @@ enum {
 	KVMI_VM_CONTROL_CLEANUP = KVMI_VM_MESSAGE_ID(9),
 	KVMI_VM_SET_PAGE_ACCESS = KVMI_VM_MESSAGE_ID(10),
 	KVMI_VM_FLUSH_CACHE     = KVMI_VM_MESSAGE_ID(11),
+	KVMI_VM_QUERY_PHYSICAL  = KVMI_VM_MESSAGE_ID(12),
 
 	KVMI_NEXT_VM_MESSAGE
 };
@@ -241,6 +242,15 @@ struct kvmi_vcpu_translate_gva {
 
 struct kvmi_vcpu_translate_gva_reply {
 	__u64 gpa;
+};
+
+struct kvmi_query_physical {
+	__u64 gfn;
+};
+
+struct kvmi_query_physical_reply {
+	__u64 gfn;
+	__u64 size;
 };
 
 #endif /* _UAPI__LINUX_KVMI_H */
